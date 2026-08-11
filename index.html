@@ -323,6 +323,9 @@ canvas#grid{border:1px solid var(--panel-border);cursor:crosshair;image-renderin
       <h2 id="gearTitle">EQUIPMENT SELECTOR</h2>
       <div class="gear-header-actions">
         <button class="btn btn-primary" onclick="applyGearStats()">UPDATE STATS</button>
+        <button class="btn btn-secondary" onclick="exportLoadout()" title="Export this loadout's live stats to a JSON file">EXPORT</button>
+        <button class="btn btn-secondary" onclick="triggerImportLoadout()" title="Import a previously exported loadout JSON file">IMPORT</button>
+        <input type="file" id="loadoutImportInput" accept="application/json" style="display:none" onchange="importLoadoutFile(this.files[0])">
         <button class="btn btn-secondary" onclick="closeEquipmentSelector()">CLOSE</button>
       </div>
     </div>
@@ -2626,6 +2629,39 @@ function changeLoadout(key){
   currentLoadout=LOADOUTS[currentLoadoutKey]||LOADOUTS.ayak;
   updateActiveLoadoutSummary();
   if(document.getElementById('gearModal')?.classList.contains('open'))renderGearDraft(currentLoadoutKey);
+}
+function exportLoadout(){
+  let loadout=LOADOUTS[currentLoadoutKey]||currentLoadout;
+  let payload={schema:1,key:currentLoadoutKey,loadout};
+  let blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  let url=URL.createObjectURL(blob);
+  let a=document.createElement('a');
+  a.href=url;a.download=`autozuk-loadout-${currentLoadoutKey}.json`;
+  document.body.appendChild(a);a.click();a.remove();
+  URL.revokeObjectURL(url);
+}
+function triggerImportLoadout(){document.getElementById('loadoutImportInput')?.click()}
+function importLoadoutFile(file){
+  let status=document.getElementById('gearStatus'),input=document.getElementById('loadoutImportInput');
+  if(!file){return}
+  let reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      let parsed=JSON.parse(reader.result);
+      let loadout=parsed&&parsed.loadout?parsed.loadout:parsed;
+      if(!loadout||typeof loadout!=='object'||!loadout.playerAcc||!loadout.monsterAtk)throw new Error('missing playerAcc/monsterAtk');
+      LOADOUTS[currentLoadoutKey]=loadout;
+      currentLoadout=loadout;
+      renderGearDraft(currentLoadoutKey);
+      updateActiveLoadoutSummary();
+      if(sim){resetSim();setStatus('Gear config imported; manual simulation reset to avoid mixing old and new rolls.','info')}
+      if(status)status.textContent=`Imported loadout into "${currentLoadoutKey}"`;
+    }catch(e){
+      if(status)status.textContent=`Import failed: ${e.message}`;
+    }
+  };
+  reader.readAsText(file);
+  if(input)input.value='';
 }
 function pasteSpawnCode(){
   navigator.clipboard.readText().then(text=>{
