@@ -2632,8 +2632,8 @@ function changeLoadout(key){
   if(document.getElementById('gearModal')?.classList.contains('open'))renderGearDraft(currentLoadoutKey);
 }
 function exportLoadout(){
-  let loadout=LOADOUTS[currentLoadoutKey]||currentLoadout;
-  let payload={schema:1,key:currentLoadoutKey,loadout};
+  let config=gearConfigs[currentLoadoutKey]||cloneGearConfig(DEFAULT_GEAR_CONFIGS[currentLoadoutKey]||DEFAULT_GEAR_CONFIGS.ayak);
+  let payload={schema:2,key:currentLoadoutKey,config};
   let blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   let url=URL.createObjectURL(blob);
   let a=document.createElement('a');
@@ -2648,13 +2648,16 @@ function applyImportedLoadoutText(text,sourceLabel){
     let clean=text.replace(/^﻿/,'').trim();
     if(!clean)throw new Error('nothing to import');
     let parsed=JSON.parse(clean);
-    let loadout=parsed&&typeof parsed==='object'&&parsed.loadout?parsed.loadout:parsed;
-    if(!loadout||typeof loadout!=='object'||!loadout.playerAcc||!loadout.monsterAtk)throw new Error('JSON is missing playerAcc/monsterAtk — not an AUTOZUK loadout export');
-    LOADOUTS[currentLoadoutKey]=loadout;
-    currentLoadout=loadout;
+    // schema 2: {config:{levels,prayer,magicBoost,defBoost,gear}} — the editable gear config,
+    // re-derived through the normal calculate/apply pipeline on import (schema 1 exported
+    // pre-computed accuracy numbers only, which left the equipment selector's own fields
+    // showing stale defaults even though the underlying numbers were correct).
+    let config=parsed&&typeof parsed==='object'&&parsed.config?parsed.config:parsed;
+    if(!config||typeof config!=='object'||!config.gear||typeof config.gear!=='object')throw new Error('JSON is missing a gear config (schema 1 loadout-only exports are no longer supported — re-export from EXPORT)');
+    gearConfigs[currentLoadoutKey]=cloneGearConfig(config);
     renderGearDraft(currentLoadoutKey);
+    applyGearStats();
     updateActiveLoadoutSummary();
-    if(sim){resetSim();setStatus('Gear config imported; manual simulation reset to avoid mixing old and new rolls.','info')}
     if(status)status.textContent=`Imported loadout into "${currentLoadoutKey}" from ${sourceLabel}`;
   }catch(e){
     console.error('AUTOZUK loadout import failed',e);
